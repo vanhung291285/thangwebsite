@@ -25,14 +25,17 @@ const safeQuery = async <T>(query: any, fallback: T): Promise<T> => {
 export const DatabaseService = {
   // 1. Cấu hình
   getConfig: async (): Promise<SchoolConfig> => {
+    if (!supabase) return {} as SchoolConfig;
     const data = await safeQuery(supabase.from('school_config').select('*').limit(1).maybeSingle(), null);
     if (!data) return {} as SchoolConfig;
     return {
-      name: data.name, slogan: data.slogan, logoUrl: data.logo_url, banner_url: data.banner_url,
-      favicon_url: data.favicon_url, principal_name: data.principal_name, address: data.address,
-      phone: data.phone, email: data.email, hotline: data.hotline, map_url: data.map_url,
+      name: data.name, slogan: data.slogan, logoUrl: data.logo_url, bannerUrl: data.banner_url,
+      faviconUrl: data.favicon_url, principalName: data.principal_name, address: data.address,
+      phone: data.phone, email: data.email, hotline: data.hotline, 
+      mapUrl: data.map_url,
       facebook: data.facebook, youtube: data.youtube, website: data.website,
-      showWelcomeBanner: data.show_welcome_banner, home_news_count: data.home_news_count || 6,
+      showWelcomeBanner: data.show_welcome_banner, 
+      homeNewsCount: data.home_news_count || 6,
       homeShowProgram: data.home_show_program, primaryColor: data.primary_color || '#1e3a8a',
       metaTitle: data.meta_title, metaDescription: data.meta_description
     };
@@ -56,6 +59,7 @@ export const DatabaseService = {
 
   // 2. Bài viết
   getPosts: async (limit: number = 30): Promise<Post[]> => {
+    if (!supabase) return [];
     const data = await safeQuery(
       supabase.from('posts').select('*').eq('status', 'published').order('date', { ascending: false }).limit(limit),
       []
@@ -69,7 +73,7 @@ export const DatabaseService = {
   },
 
   getPostById: async (id: string): Promise<Post | null> => {
-    if (!isUuid(id)) return null;
+    if (!isUuid(id) || !supabase) return null;
     const { data } = await supabase.from('posts').select('*').eq('id', id).maybeSingle();
     if (!data) return null;
     return {
@@ -93,16 +97,15 @@ export const DatabaseService = {
   },
 
   deletePost: async (id: string): Promise<void> => {
-    if (isUuid(id)) await supabase.from('posts').delete().eq('id', id);
+    if (isUuid(id) && supabase) await supabase.from('posts').delete().eq('id', id);
   },
 
-  // 3. Chuyên mục
   getPostCategories: async (): Promise<PostCategory[]> => {
+    if (!supabase) return [];
     const data = await safeQuery(supabase.from('post_categories').select('*').order('order_index', { ascending: true }), []);
     return data.map((c: any) => ({ id: c.id, name: c.name, slug: c.slug, color: c.color, order: c.order_index }));
   },
 
-  // Fix: Added savePostCategory
   savePostCategory: async (cat: PostCategory): Promise<void> => {
     if (!supabase) return;
     const c = { name: cat.name, slug: cat.slug, color: cat.color, order_index: cat.order };
@@ -110,13 +113,13 @@ export const DatabaseService = {
     else await supabase.from('post_categories').insert([c]);
   },
 
-  // Fix: Added deletePostCategory
   deletePostCategory: async (id: string): Promise<void> => {
-    if (isUuid(id)) await supabase.from('post_categories').delete().eq('id', id);
+    if (isUuid(id) && supabase) await supabase.from('post_categories').delete().eq('id', id);
   },
 
   // 4. Giới thiệu
   getIntroductions: async (): Promise<IntroductionArticle[]> => {
+    if (!supabase) return [];
     const data = await safeQuery(supabase.from('school_introductions').select('*').order('order_index', { ascending: true }), []);
     return data.map((i: any) => ({
       id: i.id, title: i.title, slug: i.slug, content: i.content, imageUrl: i.image_url, order: i.order_index, isVisible: i.is_visible
@@ -130,13 +133,13 @@ export const DatabaseService = {
     else await supabase.from('school_introductions').insert([i]);
   },
 
-  // Fix: Added deleteIntroduction
   deleteIntroduction: async (id: string): Promise<void> => {
-    if (isUuid(id)) await supabase.from('school_introductions').delete().eq('id', id);
+    if (isUuid(id) && supabase) await supabase.from('school_introductions').delete().eq('id', id);
   },
 
   // 5. Cán bộ & Nhân sự
   getStaff: async (): Promise<StaffMember[]> => {
+    if (!supabase) return [];
     const data = await safeQuery(supabase.from('staff_members').select('*').order('order_index', { ascending: true }), []);
     return data.map((s: any) => ({
       id: s.id, fullName: s.full_name, position: s.position, partyDate: s.party_date,
@@ -151,18 +154,30 @@ export const DatabaseService = {
     else await supabase.from('staff_members').insert([s]);
   },
 
-  // Fix: Added deleteStaff
   deleteStaff: async (id: string): Promise<void> => {
-    if (isUuid(id)) await supabase.from('staff_members').delete().eq('id', id);
+    if (isUuid(id) && supabase) await supabase.from('staff_members').delete().eq('id', id);
   },
 
   // 6. Văn bản
   getDocCategories: async (): Promise<DocumentCategory[]> => {
+    if (!supabase) return [];
     const data = await safeQuery(supabase.from('document_categories').select('*').order('order_index', { ascending: true }), []);
     return data.map((c: any) => ({ id: c.id, name: c.name, slug: c.slug, description: c.description, order: c.order_index }));
   },
 
+  saveDocCategory: async (cat: DocumentCategory): Promise<void> => {
+    if (!supabase) return;
+    const c = { name: cat.name, slug: cat.slug, description: cat.description, order_index: cat.order };
+    if (isUuid(cat.id)) await supabase.from('document_categories').update(c).eq('id', cat.id);
+    else await supabase.from('document_categories').insert([c]);
+  },
+
+  deleteDocCategory: async (id: string): Promise<void> => {
+    if (isUuid(id) && supabase) await supabase.from('document_categories').delete().eq('id', id);
+  },
+
   getDocuments: async (categoryId?: string): Promise<SchoolDocument[]> => {
+    if (!supabase) return [];
     let query = supabase.from('documents').select('*').order('date', { ascending: false });
     if (categoryId && isUuid(categoryId)) query = query.eq('category_id', categoryId);
     const data = await safeQuery(query, []);
@@ -176,18 +191,17 @@ export const DatabaseService = {
     else await supabase.from('documents').insert([d]);
   },
 
-  // Fix: Added deleteDocument
   deleteDocument: async (id: string): Promise<void> => {
-    if (isUuid(id)) await supabase.from('documents').delete().eq('id', id);
+    if (isUuid(id) && supabase) await supabase.from('documents').delete().eq('id', id);
   },
 
   // 7. Thư viện
   getAlbums: async (): Promise<GalleryAlbum[]> => {
+    if (!supabase) return [];
     const data = await safeQuery(supabase.from('gallery_albums').select('*').order('created_date', { ascending: false }), []);
     return data.map((a: any) => ({ id: a.id, title: a.title, description: a.description, thumbnail: a.thumbnail, createdDate: a.created_date }));
   },
 
-  // Fix: Added saveAlbum
   saveAlbum: async (album: GalleryAlbum): Promise<void> => {
     if (!supabase) return;
     const a = { title: album.title, description: album.description, thumbnail: album.thumbnail, created_date: album.createdDate };
@@ -195,19 +209,18 @@ export const DatabaseService = {
     else await supabase.from('gallery_albums').insert([a]);
   },
 
-  // Fix: Added deleteAlbum
   deleteAlbum: async (id: string): Promise<void> => {
-    if (isUuid(id)) await supabase.from('gallery_albums').delete().eq('id', id);
+    if (isUuid(id) && supabase) await supabase.from('gallery_albums').delete().eq('id', id);
   },
 
   getGallery: async (albumId?: string): Promise<GalleryImage[]> => {
+    if (!supabase) return [];
     let query = supabase.from('gallery_images').select('*');
     if (albumId && isUuid(albumId)) query = query.eq('album_id', albumId);
     const data = await safeQuery(query, []);
     return data.map((i: any) => ({ id: i.id, url: i.url, caption: i.caption, albumId: i.album_id }));
   },
 
-  // Fix: Added saveImage
   saveImage: async (image: GalleryImage): Promise<void> => {
     if (!supabase) return;
     const i = { url: image.url, caption: image.caption, album_id: isUuid(image.albumId) ? image.albumId : null };
@@ -215,13 +228,13 @@ export const DatabaseService = {
     else await supabase.from('gallery_images').insert([i]);
   },
 
-  // Fix: Added deleteImage
   deleteImage: async (id: string): Promise<void> => {
-    if (isUuid(id)) await supabase.from('gallery_images').delete().eq('id', id);
+    if (isUuid(id) && supabase) await supabase.from('gallery_images').delete().eq('id', id);
   },
 
   // 8. Videos
   getVideos: async (): Promise<Video[]> => {
+    if (!supabase) return [];
     const data = await safeQuery(supabase.from('videos').select('*').order('order_index', { ascending: true }), []);
     return data.map((v: any) => ({ id: v.id, title: v.title, youtubeUrl: v.youtube_url, youtubeId: v.youtube_id, thumbnail: v.thumbnail, isVisible: v.is_visible, order: v.order_index }));
   },
@@ -233,18 +246,17 @@ export const DatabaseService = {
     else await supabase.from('videos').insert([v]);
   },
 
-  // Fix: Added deleteVideo
   deleteVideo: async (id: string): Promise<void> => {
-    if (isUuid(id)) await supabase.from('videos').delete().eq('id', id);
+    if (isUuid(id) && supabase) await supabase.from('videos').delete().eq('id', id);
   },
 
   // 9. Menu & Giao diện
   getMenu: async (): Promise<MenuItem[]> => {
+    if (!supabase) return [];
     const data = await safeQuery(supabase.from('menu_items').select('*').order('order_index', { ascending: true }), []);
     return data.map((m: any) => ({ id: m.id, label: m.label, path: m.path, order: m.order_index }));
   },
 
-  // Fix: Added saveMenu
   saveMenu: async (items: MenuItem[]): Promise<void> => {
     if (!supabase) return;
     const payload = items.map(item => ({
@@ -256,17 +268,16 @@ export const DatabaseService = {
     await supabase.from('menu_items').upsert(payload);
   },
 
-  // Fix: Added deleteMenu
   deleteMenu: async (id: string): Promise<void> => {
-    if (isUuid(id)) await supabase.from('menu_items').delete().eq('id', id);
+    if (isUuid(id) && supabase) await supabase.from('menu_items').delete().eq('id', id);
   },
 
   getBlocks: async (): Promise<DisplayBlock[]> => {
+    if (!supabase) return [];
     const data = await safeQuery(supabase.from('display_blocks').select('*').order('order_index', { ascending: true }), []);
     return data.map((b: any) => ({ id: b.id, name: b.name, position: b.position as any, type: b.type as any, order: b.order_index, itemCount: b.item_count, isVisible: b.is_visible, htmlContent: b.html_content, targetPage: b.target_page as any }));
   },
 
-  // Fix: Added saveBlock
   saveBlock: async (block: DisplayBlock): Promise<void> => {
     if (!supabase) return;
     const b = {
@@ -283,12 +294,10 @@ export const DatabaseService = {
     else await supabase.from('display_blocks').insert([b]);
   },
 
-  // Fix: Added deleteBlock
   deleteBlock: async (id: string): Promise<void> => {
-    if (isUuid(id)) await supabase.from('display_blocks').delete().eq('id', id);
+    if (isUuid(id) && supabase) await supabase.from('display_blocks').delete().eq('id', id);
   },
 
-  // Fix: Added saveBlocksOrder
   saveBlocksOrder: async (blocks: DisplayBlock[]): Promise<void> => {
     if (!supabase) return;
     const payload = blocks.map(b => ({
@@ -305,19 +314,19 @@ export const DatabaseService = {
   },
 
   getVisitorStats: async (): Promise<VisitorStats> => {
+    if (!supabase) return { online: 1, today: 0, month: 0, total: 0 };
     const data = await safeQuery(supabase.from('daily_stats').select('visit_count').order('date', { ascending: false }), []);
     const total = data.reduce((acc: number, curr: any) => acc + (curr.visit_count || 0), 0);
     const today = data[0]?.visit_count || 0;
-    return { online: 1, today, month: total, total }; // Map tạm thời vì Schema chỉ có visit_count theo ngày
+    return { online: 1, today, month: total, total }; 
   },
 
-  // Fix: Added getUsers
   getUsers: async (): Promise<User[]> => {
+    if (!supabase) return [];
     const data = await safeQuery(supabase.from('user_profiles').select('*'), []);
     return data.map((u: any) => ({ id: u.id, username: u.username, fullName: u.full_name, role: u.role as UserRole, email: '' }));
   },
 
-  // Fix: Added saveUser
   saveUser: async (user: User): Promise<void> => {
     if (!supabase) return;
     const u = { username: user.username, full_name: user.fullName, role: user.role };
@@ -325,15 +334,29 @@ export const DatabaseService = {
     else await supabase.from('user_profiles').insert([u]);
   },
 
-  // Fix: Added deleteUser
   deleteUser: async (id: string): Promise<void> => {
-    if (isUuid(id)) await supabase.from('user_profiles').delete().eq('id', id);
+    if (isUuid(id) && supabase) await supabase.from('user_profiles').delete().eq('id', id);
   },
 
   getUserProfile: async (id: string): Promise<User | null> => {
-    if (!isUuid(id)) return null;
-    const { data } = await supabase.from('user_profiles').select('*').eq('id', id).maybeSingle();
-    if (!data) return null;
-    return { id: data.id, username: data.username, fullName: data.full_name, role: data.role as UserRole, email: '' };
+    if (!isUuid(id) || !supabase) return null;
+    try {
+        const { data, error } = await supabase.from('user_profiles').select('*').eq('id', id).maybeSingle();
+        if (error) {
+            console.error("Profile query error:", error.message);
+            return null;
+        }
+        if (!data) return null;
+        return { 
+            id: data.id, 
+            username: data.username || 'user', 
+            fullName: data.full_name || 'Thành viên', 
+            role: (data.role as UserRole) || UserRole.GUEST, 
+            email: '' 
+        };
+    } catch (err) {
+        console.error("Fetch profile internal error:", err);
+        return null;
+    }
   }
 };

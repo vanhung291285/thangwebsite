@@ -10,12 +10,26 @@ import { Gallery } from './pages/Gallery';
 import { Staff } from './pages/Staff'; 
 import { Login } from './pages/Login'; 
 import { Register } from './pages/Register';
+
+// Admin Pages
+import { Dashboard } from './pages/admin/Dashboard';
+import { ManageNews } from './pages/admin/ManageNews';
+import { ManagePostCategories } from './pages/admin/ManagePostCategories';
+import { ManageBlocks } from './pages/admin/ManageBlocks';
+import { ManageDocuments } from './pages/admin/ManageDocuments';
+import { ManageGallery } from './pages/admin/ManageGallery';
+import { ManageVideos } from './pages/admin/ManageVideos';
+import { ManageUsers } from './pages/admin/ManageUsers';
+import { ManageStaff } from './pages/admin/ManageStaff';
+import { ManageIntro } from './pages/admin/ManageIntro';
+import { ManageMenu } from './pages/admin/ManageMenu';
+import { ManageSettings } from './pages/admin/ManageSettings';
+
 import { DatabaseService } from './services/database'; 
 import { supabase, isSupabaseReady } from './services/supabaseClient';
 import { ScrollToTop } from './components/ScrollToTop';
 import { FloatingContact } from './components/FloatingContact';
-import { PageRoute, Post, SchoolConfig, User, DisplayBlock, MenuItem, StaffMember, PostCategory, DocumentCategory, SchoolDocument, GalleryImage, GalleryAlbum } from './types';
-import { Loader2 } from 'lucide-react';
+import { PageRoute, Post, SchoolConfig, User, DisplayBlock, MenuItem, StaffMember, PostCategory, DocumentCategory, SchoolDocument, GalleryImage, GalleryAlbum, UserRole } from './types';
 
 const FALLBACK_CONFIG: SchoolConfig = {
   name: 'TRƯỜNG PTDTBT TH VÀ THCS SUỐI LƯ',
@@ -58,15 +72,8 @@ const App: React.FC = () => {
   
   const [isLoading, setIsLoading] = useState(true);
 
-  const navigate = useCallback((path: string, id?: string) => {
-    setDetailId(id);
-    setCurrentPage(path as PageRoute);
-    window.scrollTo(0, 0);
-    const url = path === 'home' ? '/' : `/?page=${path}${id ? `&id=${id}` : ''}`;
-    window.history.pushState({}, '', url);
-  }, []);
-
-  const loadAllData = useCallback(async () => {
+  const loadAllData = useCallback(async (showLoader = true) => {
+    if (showLoader) setIsLoading(true);
     try {
       const [
         configData, menuData, blocksData, postsData, staffData, 
@@ -75,7 +82,7 @@ const App: React.FC = () => {
         DatabaseService.getConfig(),
         DatabaseService.getMenu(),
         DatabaseService.getBlocks(),
-        DatabaseService.getPosts(15),
+        DatabaseService.getPosts(100), // Lấy nhiều hơn cho Admin
         DatabaseService.getStaff(),
         DatabaseService.getPostCategories(),
         DatabaseService.getDocCategories(),
@@ -98,14 +105,39 @@ const App: React.FC = () => {
     } catch (err) {
       console.error("Lỗi khi tải dữ liệu từ Supabase:", err);
     } finally {
-      setIsLoading(false);
+      if (showLoader) setIsLoading(false);
+    }
+  }, []);
+
+  const navigate = useCallback((path: string, id?: string) => {
+    setDetailId(id);
+    setCurrentPage(path as PageRoute);
+    window.scrollTo(0, 0);
+    const url = path === 'home' ? '/' : `/?page=${path}${id ? `&id=${id}` : ''}`;
+    window.history.pushState({}, '', url);
+  }, []);
+
+  const handleSetUserFromAuth = useCallback(async (authUser: any) => {
+    if (!authUser) {
+      setCurrentUser(null);
+      return;
+    }
+    const profile = await DatabaseService.getUserProfile(authUser.id);
+    if (profile) {
+      setCurrentUser({ ...profile, email: authUser.email || '' });
+    } else {
+      setCurrentUser({
+        id: authUser.id,
+        username: authUser.email?.split('@')[0] || 'user',
+        fullName: authUser.user_metadata?.full_name || 'Thành viên mới',
+        role: UserRole.GUEST,
+        email: authUser.email || ''
+      });
     }
   }, []);
 
   useEffect(() => {
     loadAllData();
-
-    // Lắng nghe sự kiện URL
     const handlePopState = () => {
       const params = new URLSearchParams(window.location.search);
       const page = params.get('page') as PageRoute || 'home';
@@ -114,15 +146,12 @@ const App: React.FC = () => {
       setDetailId(id);
     };
     window.addEventListener('popstate', handlePopState);
-    
-    // Auth Listener
     if (isSupabaseReady && supabase) {
       supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session) DatabaseService.getUserProfile(session.user.id).then(setCurrentUser);
+        if (session?.user) handleSetUserFromAuth(session.user);
       });
       const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-        if (session) DatabaseService.getUserProfile(session.user.id).then(setCurrentUser);
-        else setCurrentUser(null);
+        handleSetUserFromAuth(session?.user || null);
       });
       return () => {
         subscription.unsubscribe();
@@ -130,18 +159,44 @@ const App: React.FC = () => {
       };
     }
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [loadAllData]);
+  }, [loadAllData, handleSetUserFromAuth]);
 
   if (isLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-white">
         <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-        <p className="mt-4 text-blue-900 font-bold animate-pulse">ĐANG KẾT NỐI DATABASE...</p>
+        <p className="mt-4 text-blue-900 font-bold animate-pulse uppercase tracking-widest text-xs">Đang tải hệ thống...</p>
       </div>
     );
   }
 
   const isAdminRoute = currentPage.startsWith('admin-');
+
+  // Hàm render nội dung admin dựa trên route
+  const renderAdminContent = () => {
+    switch(currentPage) {
+      case 'admin-dashboard': return <Dashboard posts={posts} />;
+      case 'admin-news': return <ManageNews posts={posts} categories={postCategories} refreshData={() => loadAllData(false)} />;
+      case 'admin-categories': return <ManagePostCategories refreshData={() => loadAllData(false)} />;
+      case 'admin-blocks': return <ManageBlocks />;
+      case 'admin-docs': return <ManageDocuments documents={documents} categories={docCategories} refreshData={() => loadAllData(false)} />;
+      case 'admin-gallery': return <ManageGallery images={gallery} albums={albums} refreshData={() => loadAllData(false)} />;
+      case 'admin-videos': return <ManageVideos refreshData={() => loadAllData(false)} />;
+      case 'admin-staff': return <ManageStaff refreshData={() => loadAllData(false)} />;
+      case 'admin-users': return <ManageUsers refreshData={() => loadAllData(false)} />;
+      case 'admin-intro': return <ManageIntro refreshData={() => loadAllData(false)} />;
+      case 'admin-menu': return <ManageMenu refreshData={() => loadAllData(false)} />;
+      case 'admin-settings': return <ManageSettings />;
+      default: return (
+        <div className="p-8">
+           <h1 className="text-2xl font-black text-slate-800 mb-4 uppercase">Trang quản trị</h1>
+           <div className="bg-white p-10 rounded-3xl border border-slate-200 shadow-sm text-center">
+              <p className="text-slate-500 font-medium">Vui lòng chọn một mục trong menu bên trái để bắt đầu quản lý.</p>
+           </div>
+        </div>
+      );
+    }
+  };
 
   return (
     <div className={`min-h-screen flex flex-col ${isAdminRoute ? 'bg-slate-50' : 'bg-white'}`}>
@@ -174,10 +229,17 @@ const App: React.FC = () => {
           <FloatingContact config={config} />
         </>
       ) : (
-        <AdminLayout activePage={currentPage} onNavigate={navigate} currentUser={currentUser} onLogout={() => supabase?.auth.signOut()}>
-           <div className="p-8">
-              <h1 className="text-2xl font-black text-slate-800 mb-4">HỆ THỐNG QUẢN TRỊ WEBSITE</h1>
-              <p className="text-slate-500">Kết nối thành công với dự án: <b>websuoilu</b></p>
+        <AdminLayout 
+          activePage={currentPage} 
+          onNavigate={navigate} 
+          currentUser={currentUser} 
+          onLogout={() => {
+            supabase?.auth.signOut();
+            navigate('home');
+          }}
+        >
+           <div className="p-4 md:p-8 animate-fade-in">
+              {renderAdminContent()}
            </div>
         </AdminLayout>
       )}
